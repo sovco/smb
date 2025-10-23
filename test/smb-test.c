@@ -6,10 +6,10 @@
 
 STF_TEST_CASE(smb, test)
 {
-    smb_benchmark_result *res = NULL;
-    SMB_BENCHMARK_BEGIN(ass, ass, .total_runs = 5, .result_storage = &res)
-    puts("ass");
-    SMB_BENCHMARK_END
+    // smb_benchmark_result *res = NULL;
+    SMB_BENCHMARK_BEGIN(ass, ass)
+    for (register int i = 0; i < 10000000; i++) {}
+    SMB_BENCHMARK_END;
 
     STF_EXPECT(true, .failure_msg = "this can't fail");
 }
