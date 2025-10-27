@@ -5,21 +5,6 @@
 
 typedef struct
 {
-    struct timespec *timestamps;
-    const char *group;
-    const char *description;
-    size_t runs_count;
-} smb_benchmark_result;
-
-typedef struct
-{
-    smb_benchmark_result **result_storage;
-    size_t total_runs;
-} smb_benchmark_options;
-
-typedef struct
-{
-    size_t runs_count;
     double average;
     double std_dev;
     double median;
@@ -27,11 +12,28 @@ typedef struct
     double max;
 } smb_benchmark_report;
 
+typedef struct
+{
+    struct timespec *timestamps;
+    const char *group;
+    const char *description;
+    size_t runs_count;
+    smb_benchmark_report report;
+} smb_benchmark_result;
+
+typedef struct
+{
+    smb_benchmark_result **result_storage;
+    size_t total_runs;
+    smb_benchmark_report report;
+} smb_benchmark_options;
+
+
 static const int SMB_DEFAULT_RUNS_COUNT = 1000;
 
 static inline unsigned long smb_timespec_to_timestamp_ns(struct timespec *time);
 
-static inline void smb_print_report(const smb_benchmark_report *restrict report);
+static inline void smb_print_report(const smb_benchmark_result *restrict result);
 static inline double smb_average_duration_calc_ns(const double *durations, const size_t count);
 static inline void smb_durations_calc_ns(const smb_benchmark_result *result, double *ret);
 static inline double smb_std_dev_calc_ns(const double *durations, const double mean, const size_t count);
@@ -59,37 +61,52 @@ static inline smb_benchmark_report smb_eval_report(const smb_benchmark_result *r
             clock_gettime(CLOCK_REALTIME, &time_before);
 
 
-#define SMB_BENCHMARK_END                                   \
-    clock_gettime(CLOCK_REALTIME, &time_after);             \
-    result.timestamps[i * 2] = time_before;                 \
-    result.timestamps[i * 2 + 1] = time_after;              \
-    }                                                       \
-    if (options.result_storage != NULL) {                   \
-        *options.result_storage = &result;                  \
-        continue;                                           \
-    }                                                       \
-    smb_benchmark_report report = smb_eval_report(&result); \
-    smb_print_report(&report);                              \
-    free(result.timestamps);                                \
-    }                                                       \
+#define SMB_BENCHMARK_END                       \
+    clock_gettime(CLOCK_REALTIME, &time_after); \
+    result.timestamps[i * 2] = time_before;     \
+    result.timestamps[i * 2 + 1] = time_after;  \
+    }                                           \
+    if (options.result_storage != NULL) {       \
+        *options.result_storage = &result;      \
+        continue;                               \
+    }                                           \
+    result.report = smb_eval_report(&result);   \
+    smb_print_report(&result);                  \
+    free(result.timestamps);                    \
+    }                                           \
     while (0)
 
 #ifdef SMB_IMPL
 
 #include <math.h>
 #include <stdlib.h>
+#include <sys/ioctl.h>
+#include <unistd.h>
 
-static const long msins = 1000;
-static const long nsinms = 1000000;
-static const long nsinsec = 1000000000;
+static const long smb_ns_in_sec = 1000000000;
 
-static inline void smb_print_report(const smb_benchmark_report *restrict report)
+int smb_get_terminal_width()
 {
-    printf("Mean    %40.1f\n", report->average);
-    printf("Min     %40.1f\n", report->min);
-    printf("Max     %40.1f\n", report->max);
-    printf("Median  %40.1f\n", report->median);
-    printf("std dev %40.1f\n", report->std_dev);
+    struct winsize w;
+    return (ioctl(STDOUT_FILENO, TIOCGWINSZ, &w) == 0) ? w.ws_col : -1;
+}
+
+static inline void smb_print_report(const smb_benchmark_result *restrict result)
+{
+    int term_width = smb_get_terminal_width();
+    size_t case_string_lenght = strlen(result->group) + strlen(result->description) + 2;
+    printf("case lenght %ld\n", case_string_lenght);
+    printf("terminal width %d\n", term_width);
+    printf("terminal width fifth %d\n", term_width / 5);
+    puts("SMB Benchmark report:");
+    puts("------------------");
+    printf("%s.%s\n\n", result->group, result->description);
+    printf("Runs Count |   %20ld    |\n", result->runs_count);
+    printf("Mean       |   %20.1f ns |\n", result->report.average);
+    printf("Min        |   %20.1f ns |\n", result->report.min);
+    printf("Max        |   %20.1f ns |\n", result->report.max);
+    printf("Median     |   %20.1f ns |\n", result->report.median);
+    printf("std dev    |   %20.1f ns |\n", result->report.std_dev);
 }
 
 static inline smb_benchmark_report smb_eval_report(const smb_benchmark_result *result)
@@ -110,7 +127,7 @@ static inline smb_benchmark_report smb_eval_report(const smb_benchmark_result *r
     median = smb_determine_median_ns(durations, result->runs_count);
     free(durations);
     return (smb_benchmark_report){
-        .runs_count = result->runs_count, .average = mean, .std_dev = std_dev, .median = median, .min = min, .max = max
+        .average = mean, .std_dev = std_dev, .median = median, .min = min, .max = max
     };
 }
 
@@ -164,7 +181,7 @@ static inline double smb_determine_median_ns(const double *sorted_durations, con
 
 static inline unsigned long smb_timespec_to_timestamp_ns(struct timespec *time)
 {
-    return time->tv_sec * nsinsec + time->tv_nsec;
+    return time->tv_sec * smb_ns_in_sec + time->tv_nsec;
 }
 
 

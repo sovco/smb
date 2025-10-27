@@ -7,7 +7,6 @@
 STF_TEST_CASE(smb, test)
 {
     SMB_BENCHMARK_BEGIN(ass, ass)
-
     SMB_BENCHMARK_END;
 
     STF_EXPECT(true, .failure_msg = "this can't fail");
