@@ -1,6 +1,10 @@
 #ifndef SMB_H
 #define SMB_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <time.h>
 
 typedef struct
@@ -29,7 +33,8 @@ typedef struct
 } smb_benchmark_options;
 
 
-static const int SMB_DEFAULT_RUNS_COUNT = 1000;
+static const size_t SMB_DEFAULT_RUNS_COUNT = 1000;
+static const size_t SMB_MINIMAL_RUNS_COUNT = 10;
 
 static inline unsigned long smb_timespec_to_timestamp_ns(struct timespec *time);
 
@@ -50,7 +55,7 @@ static inline smb_benchmark_report smb_eval_report(const smb_benchmark_result *r
         } else {                                                                                                          \
             options = (smb_benchmark_options){ __VA_ARGS__ };                                                             \
         }                                                                                                                 \
-        if (options.total_runs == 0) {                                                                                    \
+        if (options.total_runs < SMB_MINIMAL_RUNS_COUNT) {                                                                \
             options.total_runs = SMB_DEFAULT_RUNS_COUNT;                                                                  \
         }                                                                                                                 \
         result.runs_count = options.total_runs;                                                                           \
@@ -66,47 +71,121 @@ static inline smb_benchmark_report smb_eval_report(const smb_benchmark_result *r
     result.timestamps[i * 2] = time_before;     \
     result.timestamps[i * 2 + 1] = time_after;  \
     }                                           \
+    result.report = smb_eval_report(&result);   \
     if (options.result_storage != NULL) {       \
         *options.result_storage = &result;      \
         continue;                               \
     }                                           \
-    result.report = smb_eval_report(&result);   \
     smb_print_report(&result);                  \
     free(result.timestamps);                    \
     }                                           \
     while (0)
 
+#ifdef __cplusplus
+}// extern "C"
+#endif
+
 #ifdef SMB_IMPL
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <math.h>
 #include <stdlib.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
 
+#define SMB_RESET_ALL "\x1b[0m"
+#define SMB_COLOR_RED "\x1b[31m"
+#define SMB_COLOR_GREEN "\x1b[32m"
+
 static const long smb_ns_in_sec = 1000000000;
 
-int smb_get_terminal_width()
+
+static inline int __smb_count_digits_d(double val)
 {
-    struct winsize w;
-    return (ioctl(STDOUT_FILENO, TIOCGWINSZ, &w) == 0) ? w.ws_col : -1;
+    double base = 10;
+    int count = 0;
+    if (val == 0) return 1;
+    while (val / base > 0) {
+        count++;
+        base *= 10;
+    }
+    return count + 1;
+}
+
+static inline int __smb_count_digits_ul(size_t val)
+{
+    size_t base = 10;
+    int count = 0;
+    if (val == 0) return 1;
+    while (val / base > 0) {
+        count++;
+        base *= 10;
+    }
+    return count + 1;
+}
+
+static inline void __smb_print_duration_entry(const char *desc, size_t lenght, double value)
+{
+    static const char *numeric_format = "%.1f";
+    const int numeric_len = __smb_count_digits_d(value) + 2;
+    char report_entry_contents[lenght + 1];
+    char numeric_buf[numeric_len + 1];
+    sprintf(&numeric_buf[0], numeric_format, value);
+    memset(&report_entry_contents[0], (int)' ', lenght + 1);
+    memcpy(&report_entry_contents[0], desc, strlen(desc));
+    report_entry_contents[lenght + 1] = '\0';
+    report_entry_contents[10] = ' ';
+    report_entry_contents[11] = '|';
+    report_entry_contents[lenght - 4] = ' ';
+    report_entry_contents[lenght - 3] = 'n';
+    report_entry_contents[lenght - 2] = 's';
+    report_entry_contents[lenght - 1] = ' ';
+    report_entry_contents[lenght] = '|';
+    memcpy(&report_entry_contents[lenght - 4 - strlen(&numeric_buf[0])], &numeric_buf[0], strlen(&numeric_buf[0]));
+    printf(SMB_COLOR_GREEN "%s\n" SMB_RESET_ALL, &report_entry_contents[0]);
+}
+
+static inline void __smb_print_count_entry(const char *desc, size_t lenght, size_t count)
+{
+    static const char *numeric_format = "%.ld";
+    const int numeric_len = __smb_count_digits_ul(count) + 2;
+    char report_entry_contents[lenght + 1];
+    char numeric_buf[numeric_len + 1];
+    sprintf(&numeric_buf[0], numeric_format, count);
+    memset(&report_entry_contents[0], (int)' ', lenght + 1);
+    memcpy(&report_entry_contents[0], desc, strlen(desc));
+    report_entry_contents[lenght + 1] = '\0';
+    report_entry_contents[10] = ' ';
+    report_entry_contents[11] = '|';
+    report_entry_contents[lenght - 4] = ' ';
+    report_entry_contents[lenght - 3] = ' ';
+    report_entry_contents[lenght - 2] = ' ';
+    report_entry_contents[lenght - 1] = ' ';
+    report_entry_contents[lenght] = '|';
+    memcpy(&report_entry_contents[lenght - 4 - strlen(&numeric_buf[0])], &numeric_buf[0], strlen(&numeric_buf[0]));
+    printf(SMB_COLOR_GREEN "%s\n" SMB_RESET_ALL, &report_entry_contents[0]);
 }
 
 static inline void smb_print_report(const smb_benchmark_result *restrict result)
 {
-    int term_width = smb_get_terminal_width();
-    size_t case_string_lenght = strlen(result->group) + strlen(result->description) + 2;
-    printf("case lenght %ld\n", case_string_lenght);
-    printf("terminal width %d\n", term_width);
-    printf("terminal width fifth %d\n", term_width / 5);
-    puts("SMB Benchmark report:");
-    puts("------------------");
-    printf("%s.%s\n\n", result->group, result->description);
-    printf("Runs Count |   %20ld    |\n", result->runs_count);
-    printf("Mean       |   %20.1f ns |\n", result->report.average);
-    printf("Min        |   %20.1f ns |\n", result->report.min);
-    printf("Max        |   %20.1f ns |\n", result->report.max);
-    printf("Median     |   %20.1f ns |\n", result->report.median);
-    printf("std dev    |   %20.1f ns |\n", result->report.std_dev);
+    static const size_t report_minimal_width = 32;
+    const size_t title_width = strlen(result->group) + strlen(result->description) + 1 /* the point separator */;
+    const size_t report_width = report_minimal_width > title_width ? report_minimal_width : title_width;
+    char spacer[report_width + 1];
+    memset(&spacer[0], '-', report_width + 1);
+    spacer[report_width + 1] = '\0';
+    puts(SMB_COLOR_GREEN "SMB Benchmark report:" SMB_RESET_ALL);
+    printf(SMB_COLOR_GREEN "%s\n" SMB_RESET_ALL, &spacer[0]);
+    printf(SMB_COLOR_GREEN "%s.%s\n\n" SMB_RESET_ALL, result->group, result->description);
+    __smb_print_count_entry("Runs Count", report_width, result->runs_count);
+    __smb_print_duration_entry("Mean", report_width, result->report.average);
+    __smb_print_duration_entry("Min", report_width, result->report.min);
+    __smb_print_duration_entry("Max", report_width, result->report.max);
+    __smb_print_duration_entry("Median", report_width, result->report.median);
+    __smb_print_duration_entry("std dev", report_width, result->report.std_dev);
 }
 
 static inline smb_benchmark_report smb_eval_report(const smb_benchmark_result *result)
@@ -184,6 +263,9 @@ static inline unsigned long smb_timespec_to_timestamp_ns(struct timespec *time)
     return time->tv_sec * smb_ns_in_sec + time->tv_nsec;
 }
 
+#ifdef __cplusplus
+}// extern "C"
+#endif
 
 #endif// SMB_IMPL
 #endif// SMB_H
