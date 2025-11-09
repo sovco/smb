@@ -46,39 +46,39 @@ static inline void smb_sort_durations(double *durations, const size_t count);
 static inline double smb_determine_median_ns(const double *sorted_durations, const size_t count);
 static inline smb_benchmark_report smb_eval_report(const smb_benchmark_result *result);
 
-#define SMB_BENCHMARK_BEGIN(group_id, description_str, ...)                                                               \
-    do {                                                                                                                  \
-        static smb_benchmark_result result = { .group = #group_id, .description = #description_str, .timestamps = NULL }; \
-        smb_benchmark_options options;                                                                                    \
-        if (sizeof((char[]){ #__VA_ARGS__ }) == 0) {                                                                      \
-            options = (smb_benchmark_options){ 0 };                                                                       \
-        } else {                                                                                                          \
-            options = (smb_benchmark_options){ __VA_ARGS__ };                                                             \
-        }                                                                                                                 \
-        if (options.total_runs < SMB_MINIMAL_RUNS_COUNT) {                                                                \
-            options.total_runs = SMB_DEFAULT_RUNS_COUNT;                                                                  \
-        }                                                                                                                 \
-        result.runs_count = options.total_runs;                                                                           \
-        result.timestamps = malloc(sizeof(*result.timestamps) * options.total_runs * 2);                                  \
-        for (register size_t __i = 0; __i < options.total_runs; __i++) {                                                  \
-            struct timespec time_before;                                                                                  \
-            struct timespec time_after;                                                                                   \
-            clock_gettime(CLOCK_REALTIME, &time_before);
+#define SMB_BENCHMARK_BEGIN(group_id, description_str, ...)                                                                 \
+    do {                                                                                                                    \
+        static smb_benchmark_result __result = { .group = #group_id, .description = #description_str, .timestamps = NULL }; \
+        smb_benchmark_options __options;                                                                                    \
+        if (sizeof((char[]){ #__VA_ARGS__ }) == 0) {                                                                        \
+            __options = (smb_benchmark_options){ 0 };                                                                       \
+        } else {                                                                                                            \
+            __options = (smb_benchmark_options){ __VA_ARGS__ };                                                             \
+        }                                                                                                                   \
+        if (__options.total_runs < SMB_MINIMAL_RUNS_COUNT) {                                                                \
+            __options.total_runs = SMB_DEFAULT_RUNS_COUNT;                                                                  \
+        }                                                                                                                   \
+        __result.runs_count = __options.total_runs;                                                                         \
+        __result.timestamps = malloc(sizeof(*__result.timestamps) * __options.total_runs * 2);                              \
+        for (register size_t __i = 0; __i < __options.total_runs; __i++) {                                                  \
+            struct timespec __time_before;                                                                                  \
+            struct timespec __time_after;                                                                                   \
+            clock_gettime(CLOCK_REALTIME, &__time_before);
 
 
-#define SMB_BENCHMARK_END                        \
-    clock_gettime(CLOCK_REALTIME, &time_after);  \
-    result.timestamps[__i * 2] = time_before;    \
-    result.timestamps[__i * 2 + 1] = time_after; \
-    }                                            \
-    result.report = smb_eval_report(&result);    \
-    if (options.result_storage != NULL) {        \
-        *options.result_storage = &result;       \
-        continue;                                \
-    }                                            \
-    smb_print_report(&result);                   \
-    free(result.timestamps);                     \
-    }                                            \
+#define SMB_BENCHMARK_END                            \
+    clock_gettime(CLOCK_REALTIME, &__time_after);    \
+    __result.timestamps[__i * 2] = __time_before;    \
+    __result.timestamps[__i * 2 + 1] = __time_after; \
+    }                                                \
+    __result.report = smb_eval_report(&__result);    \
+    if (__options.result_storage != NULL) {          \
+        *__options.result_storage = &__result;       \
+        continue;                                    \
+    }                                                \
+    smb_print_report(&__result);                     \
+    free(__result.timestamps);                       \
+    }                                                \
     while (0)
 
 #ifdef __cplusplus
