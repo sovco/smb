@@ -60,25 +60,25 @@ static inline smb_benchmark_report smb_eval_report(const smb_benchmark_result *r
         }                                                                                                                 \
         result.runs_count = options.total_runs;                                                                           \
         result.timestamps = malloc(sizeof(*result.timestamps) * options.total_runs * 2);                                  \
-        for (register size_t i = 0; i < options.total_runs; i++) {                                                        \
+        for (register size_t __i = 0; __i < options.total_runs; __i++) {                                                  \
             struct timespec time_before;                                                                                  \
             struct timespec time_after;                                                                                   \
             clock_gettime(CLOCK_REALTIME, &time_before);
 
 
-#define SMB_BENCHMARK_END                       \
-    clock_gettime(CLOCK_REALTIME, &time_after); \
-    result.timestamps[i * 2] = time_before;     \
-    result.timestamps[i * 2 + 1] = time_after;  \
-    }                                           \
-    result.report = smb_eval_report(&result);   \
-    if (options.result_storage != NULL) {       \
-        *options.result_storage = &result;      \
-        continue;                               \
-    }                                           \
-    smb_print_report(&result);                  \
-    free(result.timestamps);                    \
-    }                                           \
+#define SMB_BENCHMARK_END                        \
+    clock_gettime(CLOCK_REALTIME, &time_after);  \
+    result.timestamps[__i * 2] = time_before;    \
+    result.timestamps[__i * 2 + 1] = time_after; \
+    }                                            \
+    result.report = smb_eval_report(&result);    \
+    if (options.result_storage != NULL) {        \
+        *options.result_storage = &result;       \
+        continue;                                \
+    }                                            \
+    smb_print_report(&result);                   \
+    free(result.timestamps);                     \
+    }                                            \
     while (0)
 
 #ifdef __cplusplus
